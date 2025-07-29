@@ -1,5 +1,103 @@
 ---
 title: "Perry_MZ_analysis_07_2025"
+author: "Madelyn Willis"
 format: html
 ---
+
+The goal of this code is the following:
+1. To import and assess soil and environmental data from the Perry site.
+2. To perform PCA and correlation between covariates and soil data.
+3. To bootstrap data to create a training and testing dataset.
+4. To create via random forest, ordinary kriging, and regression kriging models for soil properties.
+5. To create management zones of each soil property from each modelling method. 
+6. To compare accuracy from raw model maps and management zones, with testing soil data.
+7. To look at bootstrapped results of accuracies.
+8. To produce final management zone maps of soil properties averaging bootstrapped results.
+
+```{r setup, include=FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+library(RSAGA)
+rsaga.env(path = "C:/Users/mrw78462/OneDrive - University of Georgia/Desktop/saga-9.8.1_x64")
+saga_env <- rsaga.env(path = "C:/Users/mrw78462/OneDrive - University of Georgia/Desktop/saga-9.8.1_x64")
+library(raster)
+library(terra)
+```
+
+
+### 1. Load Data
+```{r 1. Load data}
+
+#Load soil data:
+soil_data <- read.csv("../Local Data- DO NOT PUSH/soil_points_corrected.csv")
+
+
+#Load environmental data:
+
+  #covariates (50cm): 
+    #topographic:
+rsaga.import.gdal(
+  in.grid = "../Local Data- DO NOT PUSH/dem_filled.tif",
+  out.grid = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+  env = saga_env
+)
+      #elevation:
+      #slope:
+      #aspect:
+      #curvatures:
+        rsaga.geoprocessor(
+          lib = "ta_morphometry",
+          module = 0,
+          param = list(
+            ELEVATION = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+            SLOPE = "../Local Data- DO NOT PUSH/slope.sgrd",
+            ASPECT = "../Local Data- DO NOT PUSH/aspect.sgrd",
+            C_PROF = "../Local Data- DO NOT PUSH/prof_curv.sgrd",
+            C_PLAN = "../Local Data- DO NOT PUSH/plan_curv.sgrd",
+            C_TANG = "../Local Data- DO NOT PUSH/tang_curv.sgrd"),
+          env = saga_env)
+        # EXPORT TO TIFF
+          slope <- rast("../Local Data- DO NOT PUSH/slope.sdat")
+          writeRaster(slope, "../Local Data- DO NOT PUSH/slope.tif", overwrite=TRUE)
+          aspect <- rast("../Local Data- DO NOT PUSH/aspect.sdat")
+          writeRaster(aspect, "../Local Data- DO NOT PUSH/aspect.tif", overwrite=TRUE)
+          prof_curv <- rast("../Local Data- DO NOT PUSH/prof_curv.sdat")
+          writeRaster(prof_curv, "../Local Data- DO NOT PUSH/prof_curv.tif", overwrite=TRUE)
+          plan_curv <- rast("../Local Data- DO NOT PUSH/plan_curv.sdat")
+          writeRaster(plan_curv, "../Local Data- DO NOT PUSH/plan_curv.tif", overwrite=TRUE)
+          tang_curv <- rast("../Local Data- DO NOT PUSH/tang_curv.sdat")
+          writeRaster(tang_curv, "../Local Data- DO NOT PUSH/tang_curv.tif", overwrite=TRUE)
+          
+      #topographic_position_index:
+        rsaga.geoprocessor(
+          lib = "ta_morphometry",
+          module = "Multi-Scale Topographic Position Index (TPI)",
+          param = list(
+            DEM = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+            TPI = "../Local Data- DO NOT PUSH/tpi.sgrd"),
+          env = saga_env
+        )
+        # EXPORT TO TIFF
+          tpi <- rast("../Local Data- DO NOT PUSH/tpi.sdat")
+          writeRaster(tpi, "../Local Data- DO NOT PUSH/tpi.tif", overwrite=TRUE)
+
+    #hydrologic:
+      #topographic wetness index:
+      
+  #forced resamples of 50cm data:
+    #placeholder
+
+  #Planet data (3m):
+    #NDVI:
+
+  #USGS data (1m) (should use in instances where resampling 50cm data does not work):
+    #placeholder
+
+  #Multispectral bare soil data:
+    #placeholder
+
+  #Hyperspectral bare soil data:
+    #placeholder
+```
 
