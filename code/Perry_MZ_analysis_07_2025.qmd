@@ -34,7 +34,7 @@ soil_data <- read.csv("../Local Data- DO NOT PUSH/soil_points_corrected.csv")
 
 
 #Load environmental data:
-
+dem <- rast("../Local Data- DO NOT PUSH/dem_filled.tif")
   #covariates (50cm): 
     #topographic:
 rsaga.import.gdal(
@@ -43,7 +43,15 @@ rsaga.import.gdal(
   env = saga_env
 )
       #elevation:
-      #slope:
+      #slope (must be done in terra::terrain):
+        slope <- terrain(dem, v = "slope", unit = "degrees")
+        
+        rsaga.import.gdal(
+              in.grid = "../Local Data- DO NOT PUSH/slope.tif",
+              out.grid = "../Local Data- DO NOT PUSH/slope.sgrd",
+              env = saga_env)
+        
+        writeRaster(slope, "../Local Data- DO NOT PUSH/slope.tif", overwrite=TRUE)
       #aspect:
       #curvatures:
         rsaga.geoprocessor(
@@ -51,15 +59,14 @@ rsaga.import.gdal(
           module = 0,
           param = list(
             ELEVATION = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
-            SLOPE = "../Local Data- DO NOT PUSH/slope.sgrd",
+            #SLOPE = "../Local Data- DO NOT PUSH/slope.sgrd",
             ASPECT = "../Local Data- DO NOT PUSH/aspect.sgrd",
             C_PROF = "../Local Data- DO NOT PUSH/prof_curv.sgrd",
             C_PLAN = "../Local Data- DO NOT PUSH/plan_curv.sgrd",
             C_TANG = "../Local Data- DO NOT PUSH/tang_curv.sgrd"),
           env = saga_env)
         # EXPORT TO TIFF
-          slope <- rast("../Local Data- DO NOT PUSH/slope.sdat")
-          writeRaster(slope, "../Local Data- DO NOT PUSH/slope.tif", overwrite=TRUE)
+          # writeRaster(slope, "../Local Data- DO NOT PUSH/slope.tif", overwrite=TRUE)
           aspect <- rast("../Local Data- DO NOT PUSH/aspect.sdat")
           writeRaster(aspect, "../Local Data- DO NOT PUSH/aspect.tif", overwrite=TRUE)
           prof_curv <- rast("../Local Data- DO NOT PUSH/prof_curv.sdat")
@@ -81,23 +88,152 @@ rsaga.import.gdal(
         # EXPORT TO TIFF
           tpi <- rast("../Local Data- DO NOT PUSH/tpi.sdat")
           writeRaster(tpi, "../Local Data- DO NOT PUSH/tpi.tif", overwrite=TRUE)
+      #Valley Depth:
+        rsaga.geoprocessor(
+          lib = "ta_channels",
+          module = "Valley Depth",
+          param = list(
+            ELEVATION  = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+            VALLEY_DEPTH = "../Local Data- DO NOT PUSH/valley_depth.sgrd",
+            THRESHOLD = 5),
+          env = saga_env
+        )
+        # EXPORT TO TIFF
+          valley_depth <- rast("../Local Data- DO NOT PUSH/valley_depth.sdat")
+          writeRaster(valley_depth, "../Local Data- DO NOT PUSH/valley_depth.tif", overwrite=TRUE)
+          plot(valley_depth)
+      #Relative Heights:
+      #TRI
+        rsaga.geoprocessor(
+          lib = "ta_morphometry",
+          module = "Terrain Ruggedness Index (TRI)",
+          param = list(
+            DEM = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+            TRI = "../Local Data- DO NOT PUSH/tri.sgrd"),
+          env = saga_env
+        )
+        # EXPORT TO TIFF
+          tri <- rast("../Local Data- DO NOT PUSH/tri.sdat")
+          writeRaster(tri, "../Local Data- DO NOT PUSH/tri.tif", overwrite=TRUE)
+      #Terrain surface texture:
+          
+      #convergence index:
+      #valley and ridge detection:
+          rsaga.geoprocessor(
+              lib = "ta_morphometry",
+              module = 24,  # Valley and Ridge Detection (Top Hat Approach)
+              param = list(
+                DEM = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+                VALLEY_IDX = "../Local Data- DO NOT PUSH/val_idx.sgrd",
+                HILL_IDX = "../Local Data- DO NOT PUSH/hill_idx.sgrd"
+              ),
+              env = saga_env
+            )
+          # EXPORT TO TIFF
+          val_ridge <- rast("../Local Data- DO NOT PUSH/val_idx.sdat")
+          writeRaster(val_ridge, "../Local Data- DO NOT PUSH/val_idx.tif", overwrite=TRUE)
+      #vector ruggedness measure:
+        rsaga.geoprocessor(
+          lib = "ta_morphometry",
+          module = "Vector Ruggedness Measure (VRM)",
+          param = list(
+            DEM = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+            VRM = "../Local Data- DO NOT PUSH/vrm.sgrd"),
+          env = saga_env
+        )
+        # EXPORT TO TIFF
+          vrm <- rast("../Local Data- DO NOT PUSH/vrm.sdat")
+          writeRaster(vrm, "../Local Data- DO NOT PUSH/vrm.tif", overwrite=TRUE)
 
     #hydrologic:
-      #topographic wetness index:
-      
+    #gaussian filter of DEM:
+      rsaga.geoprocessor(
+        lib = "grid_filter",
+        module = "Gaussian Filter",
+        param = list(
+          INPUT = "../Local Data- DO NOT PUSH/dem_filled.sgrd",
+          RESULT = "../Local Data- DO NOT PUSH/dem_gaussian.sgrd",
+          KERNEL_RADIUS = 3,  # Radius of the Gaussian filter
+          SIGMA = 1.0  # Standard deviation of the Gaussian filter
+        ),
+        env = saga_env
+      )
+      # EXPORT TO TIFF
+      dem_gaussian <- rast("../Local Data- DO NOT PUSH/dem_gaussian.sdat")
+      writeRaster(dem_gaussian, "../Local Data- DO NOT PUSH/dem_gaussian.tif", overwrite=TRUE)
+        #Sink filling:
+          rsaga.geoprocessor(
+            lib = "ta_preprocessor",
+            module = "Fill Sinks XXL (Wang & Liu)",  # Fill Sinks (Wang & Liu)
+            param = list(
+              ELEV = "../Local Data- DO NOT PUSH/dem_gaussian.sgrd",
+              FILLED = "../Local Data- DO NOT PUSH/sink_filled.sgrd",
+              MINSLOPE = 0.5
+            ),
+            env = saga_env
+          )
+        # EXPORT TO TIFF
+          sink_filled <- rast("../Local Data- DO NOT PUSH/sink_filled.sdat")
+          writeRaster(sink_filled, "../Local Data- DO NOT PUSH/sink_filled.tif", overwrite=TRUE)
+        # Catchment Area: multi flow direction
+        rsaga.geoprocessor(
+            lib = "ta_hydrology",
+            module = 0,  # Catchment Area (MFD)
+            param = list(
+              ELEVATION = "../Local Data- DO NOT PUSH/sink_filled.sgrd",
+              FLOW = "../Local Data- DO NOT PUSH/flow_accum.sgrd",
+              METHOD = 5  # (0 = D8, 1 = D∞, 2 = MFD, 3 = Rho8, 4 = Rho∞)
+            ),
+            env = saga_env
+          )
+        # EXPORT TO TIFF
+          flow_accum <- rast("../Local Data- DO NOT PUSH/flow_accum.sdat")
+          writeRaster(flow_accum, "../Local Data- DO NOT PUSH/flow_accum.tif", overwrite=TRUE)
+          
+        # Channel network
+          channel_network <- flow_accum >= 5e-9  # Threshold for channel network
+          plot(channel_network)
+            
+        # topographic wetness index:
+
+          rsaga.geoprocessor(
+            lib = "ta_hydrology",
+            module = "Topographic Wetness Index",  # Topographic Wetness Index
+            param = list(
+              SLOPE = "../Local Data- DO NOT PUSH/slope.sgrd",
+              AREA = "../Local Data- DO NOT PUSH/flow_accum.sgrd",
+              TWI = "../Local Data- DO NOT PUSH/twi.sgrd",
+              CONV = 0,      # (0 = no conversion, 1 = pseudo specific)
+              METHOD = 0     # (0 = Standard, 1 = TOPMODEL)
+            ),
+            env = saga_env
+          )
+        # EXPORT TO TIFF
+          twi <- rast("../Local Data- DO NOT PUSH/twi.sdat")
+          writeRaster(twi, "../Local Data- DO NOT PUSH/twi.tif", overwrite=TRUE)
   #forced resamples of 50cm data:
     #placeholder
 
   #Planet data (3m):
     #NDVI:
-
+      veg2022 <- rast("../Local Data- DO NOT PUSH/Planet_sept_2022_veg_imagery.tif")
+      #NDVI = NIR - R / NIR + R
+      ndvi <- (veg2022[[8]] - veg2022[[6]]) / (veg2022[[8]] + veg2022[[6]])
   #USGS data (1m) (should use in instances where resampling 50cm data does not work):
     #placeholder
-
+      
   #Multispectral bare soil data:
     #placeholder
 
   #Hyperspectral bare soil data:
     #placeholder
+      
 ```
+
+```{r 1a. Align and clip all data sources}
+# create a border around soil points and clip all rasters to this border
+soil_points <- vect(soil_data, geom = c("x", "y"), crs = "EPSG:4326")
+
+```
+
 
